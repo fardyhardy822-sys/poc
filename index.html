@@ -1,0 +1,14 @@
+<html>
+	<body>
+	<script>
+		font_face = new FontFace('foo', 'url("mal.ttf")');
+    font_face.load().then(() => {
+      console.log('Font loaded');
+      document.fonts.add(font_face);
+      document.body.style.fontFamily = 'foo';
+      document.body.textContent = '%%';
+    }).catch(err => {
+      console.error('Font failed to load', err);
+    });
+	</script>
+	</body></html>
